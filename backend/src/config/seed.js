@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { AuditLog } from '../models/AuditLog.js';
 import { User } from '../models/User.js';
 import { Policy } from '../models/Policy.js';
@@ -6,6 +7,10 @@ import { DEFAULT_POLICY } from '../services/policy.service.js';
 import { logger } from '../utils/logger.js';
 
 export const seedInitialDatabaseData = async () => {
+  if (mongoose.connection.readyState !== 1) {
+    logger.warn('MongoDB not connected; skipping initial seed. Gateway will operate in volatile/cloud-sync mode.');
+    return;
+  }
   try {
     // 1. Ensure Global Policy exists
     const existingPolicy = await Policy.findOne({ isGlobal: true });

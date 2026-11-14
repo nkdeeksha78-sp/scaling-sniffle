@@ -148,7 +148,7 @@ export const TrustCenter = () => {
             <span className="text-[10px] text-rose-400 uppercase font-bold">Step 3</span>
             <h4 className="font-semibold text-guard-text mt-1">Policy Gate</h4>
             <p className="text-[11px] text-guard-muted mt-1 leading-relaxed">
-              If risk score >= threshold, request is BLOCKED. Zero LLM tokens consumed.
+              If risk score &gt;= threshold, request is BLOCKED. Zero LLM tokens consumed.
             </p>
           </div>
 

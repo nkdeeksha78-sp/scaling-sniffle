@@ -11,8 +11,9 @@ export const connectDB = async () => {
   }
 
   try {
+    mongoose.set('bufferCommands', false);
     const conn = await mongoose.connect(config.mongoUri, {
-      serverSelectionTimeoutMS: 5000,
+      serverSelectionTimeoutMS: 3000,
     });
 
     isConnected = conn.connections[0].readyState === 1;

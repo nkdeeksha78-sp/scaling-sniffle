@@ -220,13 +220,21 @@ JWT_SECRET=super_secure_jwt_random_secret_32_chars_minimum
 GEMINI_API_KEY=your_google_gemini_api_key_here
 GEMINI_MODEL=gemini-1.5-flash
 CLIENT_URL=http://localhost:5173,https://your-app.vercel.app
-```
-Start backend:
-```bash
-npm run dev
+
+# Optional Cloud Database Sync (Supabase PostgreSQL)
+SUPABASE_URL=https://qqnvtlotqorfjrltkjnu.supabase.co
+SUPABASE_ANON_KEY=your_publishable_anon_key
+SUPABASE_SERVICE_ROLE_KEY=your_secret_service_role_key
 ```
 
-### 2. Setup Frontend
+### 2. Setup Supabase Cloud Database (Optional & Instant)
+To store audit logs and security policies in Supabase:
+1. Open your **[Supabase Project Dashboard](https://supabase.com/dashboard)**.
+2. Navigate to **SQL Editor**.
+3. Copy the contents of [`supabase_schema.sql`](file:///c:/Users/Deeksha/.antigravity-ide/supabase_schema.sql) and click **Run**.
+4. Tables `audit_logs`, `policies`, and security views will be automatically created with pre-seeded enterprise policies!
+
+### 3. Setup Frontend
 ```bash
 cd frontend
 npm install

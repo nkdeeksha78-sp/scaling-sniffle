@@ -8,6 +8,7 @@ import { analyzeWithGemini } from '../services/gemini.service.js';
 import { getActivePolicy } from '../services/policy.service.js';
 import { hashPrompt, generateTraceId } from '../utils/crypto.js';
 import { AuditLog } from '../models/AuditLog.js';
+import { supabaseService } from '../services/supabase.service.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
 
@@ -152,6 +153,24 @@ router.post('/', optionalAuth, async (req, res, next) => {
     } catch (dbErr) {
       logger.warn('Failed writing audit log to database (proceeding without crash):', dbErr.message);
     }
+
+    // Sync to Supabase audit_logs table (Zero-blocking async sync)
+    supabaseService.syncAuditLog({
+      promptHash,
+      userId: user ? user._id : null,
+      userEmail: user ? user.email : 'anonymous@trustguard.internal',
+      riskScore: riskAnalysis.riskScore,
+      riskLevel: riskAnalysis.riskLevel,
+      threatType: Array.isArray(riskAnalysis.categories) ? riskAnalysis.categories.join(', ') : 'NONE',
+      decision: finalDecision,
+      policyViolated: riskAnalysis.policyTriggered,
+      detectedCategories: riskAnalysis.categories,
+      matchesCount: detectionResult.totalCount,
+      maskedPromptPreview: sanitizedPromptText.substring(0, 300),
+      aiResponseStatus: aiStatus,
+      executionTimeMs: Date.now() - startTime,
+      timestamp: new Date(),
+    }).catch(sbErr => logger.warn(`[Supabase] Background sync warning: ${sbErr.message}`));
 
     const responsePayload = {
       traceId,

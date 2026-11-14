@@ -5,6 +5,7 @@ import morgan from 'morgan';
 import { config } from './src/config/env.js';
 import { connectDB } from './src/config/db.js';
 import { seedInitialDatabaseData } from './src/config/seed.js';
+import { checkSupabaseConnection } from './src/config/supabase.js';
 import { apiRateLimiter } from './src/middleware/rateLimiter.js';
 import { errorHandler } from './src/middleware/errorHandler.js';
 import { logger } from './src/utils/logger.js';
@@ -69,22 +70,26 @@ app.use(express.urlencoded({ extended: true, limit: '2mb' }));
 app.use('/api/', apiRateLimiter);
 
 // Health Check
-app.get('/health', (req, res) => {
+app.get('/health', async (req, res) => {
+  const supabaseStatus = await checkSupabaseConnection();
   res.status(200).json({
     status: 'healthy',
     service: 'TrustGuard AI — Secure AI Prompt Gateway',
     timestamp: new Date().toISOString(),
     environment: config.nodeEnv,
     geminiConfigured: !!config.geminiApiKey,
+    supabase: supabaseStatus,
   });
 });
 
-app.get('/api/health', (req, res) => {
+app.get('/api/health', async (req, res) => {
+  const supabaseStatus = await checkSupabaseConnection();
   res.status(200).json({
     status: 'healthy',
     service: 'TrustGuard AI Gateway API',
     version: '1.2.0',
     timestamp: new Date().toISOString(),
+    supabase: supabaseStatus,
   });
 });
 

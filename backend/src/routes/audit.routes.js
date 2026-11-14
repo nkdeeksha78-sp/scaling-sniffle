@@ -1,5 +1,6 @@
 import express from 'express';
 import { AuditLog } from '../models/AuditLog.js';
+import { auditStore } from '../services/store.service.js';
 import { optionalAuth } from '../middleware/auth.js';
 
 const router = express.Router();
@@ -58,14 +59,12 @@ router.get('/', optionalAuth, async (req, res, next) => {
     const skip = (pageNum - 1) * limitNum;
     const sortOrder = order === 'asc' ? 1 : -1;
 
-    const [logs, total] = await Promise.all([
-      AuditLog.find(query)
-        .sort({ [sortBy]: sortOrder })
-        .skip(skip)
-        .limit(limitNum)
-        .lean(),
-      AuditLog.countDocuments(query),
-    ]);
+    const { logs, total } = await auditStore.find({
+      query,
+      limit: limitNum,
+      page: pageNum,
+      sort: { [sortBy]: sortOrder },
+    });
 
     res.status(200).json({
       success: true,
@@ -84,7 +83,7 @@ router.get('/', optionalAuth, async (req, res, next) => {
 
 router.get('/export/csv', optionalAuth, async (req, res, next) => {
   try {
-    const logs = await AuditLog.find().sort({ createdAt: -1 }).limit(1000).lean();
+    const { logs } = await auditStore.find({ limit: 1000 });
 
     const headers = [
       'TraceID',

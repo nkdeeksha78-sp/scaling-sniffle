@@ -8,6 +8,7 @@ import { analyzeWithGemini } from '../services/gemini.service.js';
 import { getActivePolicy } from '../services/policy.service.js';
 import { hashPrompt, generateTraceId } from '../utils/crypto.js';
 import { AuditLog } from '../models/AuditLog.js';
+import { auditStore } from '../services/store.service.js';
 import { supabaseService } from '../services/supabase.service.js';
 import { optionalAuth } from '../middleware/auth.js';
 import { logger } from '../utils/logger.js';
@@ -125,7 +126,7 @@ router.post('/', optionalAuth, async (req, res, next) => {
 
     // 8. Persist Zero-Knowledge Audit Log
     try {
-      await AuditLog.create({
+      await auditStore.record({
         userId: user ? user._id : null,
         userEmail: user ? user.email : 'anonymous@trustguard.internal',
         traceId,

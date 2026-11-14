@@ -1,3 +1,4 @@
+import mongoose from 'mongoose';
 import { Policy } from '../models/Policy.js';
 import { logger } from '../utils/logger.js';
 
@@ -27,47 +28,71 @@ export const DEFAULT_POLICY = {
   ],
 };
 
+let memoryPolicy = { ...DEFAULT_POLICY, updatedAt: new Date() };
+
+const isMongoLive = () => mongoose.connection.readyState === 1;
+
 export const getActivePolicy = async (userId = null) => {
-  try {
-    let policy = null;
-    if (userId) {
-      policy = await Policy.findOne({ userId });
+  if (isMongoLive()) {
+    try {
+      let policy = null;
+      if (userId) {
+        policy = await Policy.findOne({ userId });
+      }
+      if (!policy) {
+        policy = await Policy.findOne({ isGlobal: true });
+      }
+      if (policy) return policy;
+    } catch (error) {
+      logger.warn('Failed querying policy from database, using memory baseline:', error.message);
     }
-    if (!policy) {
-      policy = await Policy.findOne({ isGlobal: true });
-    }
-    if (!policy) {
-      policy = await Policy.create(DEFAULT_POLICY);
-    }
-    return policy;
-  } catch (error) {
-    logger.warn('Failed querying policy from database, using memory default baseline:', error.message);
-    return { ...DEFAULT_POLICY };
   }
+  return memoryPolicy;
 };
 
 export const updatePolicy = async (policyUpdates, userId = null) => {
-  let policy = await Policy.findOne(userId ? { userId } : { isGlobal: true });
-  if (!policy) {
-    policy = new Policy({
-      ...DEFAULT_POLICY,
-      ...policyUpdates,
-      userId,
-      isGlobal: !userId,
-    });
-  } else {
-    Object.assign(policy, policyUpdates);
+  if (isMongoLive()) {
+    try {
+      let policy = await Policy.findOne(userId ? { userId } : { isGlobal: true });
+      if (!policy) {
+        policy = new Policy({
+          ...DEFAULT_POLICY,
+          ...policyUpdates,
+          userId,
+          isGlobal: !userId,
+        });
+      } else {
+        Object.assign(policy, policyUpdates);
+      }
+      return await policy.save();
+    } catch (err) {
+      logger.warn('Failed saving policy to database, saving to memory:', err.message);
+    }
   }
-  return policy.save();
+
+  memoryPolicy = {
+    ...memoryPolicy,
+    ...policyUpdates,
+    updatedAt: new Date(),
+  };
+  return memoryPolicy;
 };
 
 export const resetPolicyToDefault = async (userId = null) => {
-  let policy = await Policy.findOne(userId ? { userId } : { isGlobal: true });
-  if (policy) {
-    Object.assign(policy, DEFAULT_POLICY);
-    return policy.save();
+  if (isMongoLive()) {
+    try {
+      let policy = await Policy.findOne(userId ? { userId } : { isGlobal: true });
+      if (policy) {
+        Object.assign(policy, DEFAULT_POLICY);
+        return await policy.save();
+      }
+    } catch (err) {
+      logger.warn('Failed resetting policy in database, resetting memory policy:', err.message);
+    }
   }
-  return Policy.create(DEFAULT_POLICY);
+
+  memoryPolicy = { ...DEFAULT_POLICY, updatedAt: new Date() };
+  return memoryPolicy;
 };
 
 export default { getActivePolicy, updatePolicy, resetPolicyToDefault, DEFAULT_POLICY };

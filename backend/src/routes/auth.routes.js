@@ -1,6 +1,6 @@
 import express from 'express';
 import { z } from 'zod';
-import { User } from '../models/User.js';
+import { userStore } from '../services/store.service.js';
 import { signJwt } from '../utils/crypto.js';
 import { authenticate } from '../middleware/auth.js';
 import { authRateLimiter } from '../middleware/rateLimiter.js';
@@ -28,7 +28,7 @@ router.post('/register', authRateLimiter, async (req, res, next) => {
   try {
     const validated = registerSchema.parse(req.body);
 
-    const existingUser = await User.findOne({ email: validated.email.toLowerCase() });
+    const existingUser = await userStore.findByEmail(validated.email);
     if (existingUser) {
       return res.status(409).json({
         success: false,
@@ -37,16 +37,18 @@ router.post('/register', authRateLimiter, async (req, res, next) => {
     }
 
     // STRICT SECURITY RULE: Always assign standard 'user' role.
-    const user = await User.create({
+    const user = await userStore.create({
       name: validated.name.trim(),
       email: validated.email.toLowerCase().trim(),
       password: validated.password,
       role: 'user', // Forced: cannot be overridden by request payload
-      organization: validated.organization.trim(),
+      organization: validated.organization?.trim() || 'Enterprise User',
     });
 
+    const userId = user._id || user.id;
+
     const token = signJwt({
-      id: user._id,
+      id: userId,
       email: user.email,
       role: user.role,
       name: user.name,
@@ -59,7 +61,7 @@ router.post('/register', authRateLimiter, async (req, res, next) => {
       message: 'Account registered successfully',
       token,
       user: {
-        id: user._id,
+        id: userId,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -85,7 +87,7 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
   try {
     const validated = loginSchema.parse(req.body);
 
-    const user = await User.findOne({ email: validated.email.toLowerCase() }).select('+password');
+    const user = await userStore.findByEmail(validated.email);
     if (!user) {
       return res.status(401).json({
         success: false,
@@ -93,7 +95,7 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       });
     }
 
-    const isMatch = await user.comparePassword(validated.password);
+    const isMatch = await userStore.verifyPassword(validated.password, user);
     if (!isMatch) {
       return res.status(401).json({
         success: false,
@@ -101,8 +103,10 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       });
     }
 
+    const userId = user._id || user.id;
+
     const token = signJwt({
-      id: user._id,
+      id: userId,
       email: user.email,
       role: user.role,
       name: user.name,
@@ -115,7 +119,7 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
       message: 'Authentication successful',
       token,
       user: {
-        id: user._id,
+        id: userId,
         name: user.name,
         email: user.email,
         role: user.role,
@@ -140,9 +144,9 @@ router.post('/login', authRateLimiter, async (req, res, next) => {
  */
 router.post('/demo-login', async (req, res, next) => {
   try {
-    let demoAdmin = await User.findOne({ email: 'admin@trustguard.ai' });
+    let demoAdmin = await userStore.findByEmail('admin@trustguard.ai');
     if (!demoAdmin) {
-      demoAdmin = await User.create({
+      demoAdmin = await userStore.create({
         name: 'SecOps Administrator',
         email: 'admin@trustguard.ai',
         password: 'TrustGuardDemoPassword2026!',
@@ -151,8 +155,10 @@ router.post('/demo-login', async (req, res, next) => {
       });
     }
 
+    const adminId = demoAdmin._id || demoAdmin.id;
+
     const token = signJwt({
-      id: demoAdmin._id,
+      id: adminId,
       email: demoAdmin.email,
       role: demoAdmin.role,
       name: demoAdmin.name,
@@ -163,7 +169,7 @@ router.post('/demo-login', async (req, res, next) => {
       message: 'Demo Administrator session established',
       token,
       user: {
-        id: demoAdmin._id,
+        id: adminId,
         name: demoAdmin.name,
         email: demoAdmin.email,
         role: demoAdmin.role,

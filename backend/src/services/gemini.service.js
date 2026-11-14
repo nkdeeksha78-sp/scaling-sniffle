@@ -101,58 +101,78 @@ Respond STRICTLY with valid JSON matching this schema:
   "recommendedAction": "ALLOW" | "BLOCK" | "REVIEW"
 }`;
 
-  try {
-    const model = genAI.getGenerativeModel({
-      model: config.geminiModel || 'gemini-1.5-flash',
-      generationConfig: {
-        responseMimeType: 'application/json',
-        temperature: 0.1,
-        maxOutputTokens: 800,
-      },
-    });
+  const candidateModels = Array.from(new Set([
+    config.geminiModel,
+    'gemini-2.5-flash',
+    'gemini-flash-latest',
+    'gemini-1.5-flash',
+  ])).filter(Boolean);
 
-    const promptToSend = `${systemInstruction}\n\nSanitized prompt to analyze:\n"${sanitizedPrompt}"`;
+  let lastError = null;
 
-    const apiPromise = model.generateContent(promptToSend);
-    const timeoutPromise = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Gemini API timeout exceeded')), 8000)
-    );
+  for (const modelName of candidateModels) {
+    try {
+      const model = genAI.getGenerativeModel({
+        model: modelName,
+        generationConfig: {
+          responseMimeType: 'application/json',
+          temperature: 0.1,
+          maxOutputTokens: 800,
+        },
+      });
 
-    const result = await Promise.race([apiPromise, timeoutPromise]);
-    const responseText = result.response.text();
-    const rawParsed = parseJsonSafely(responseText);
+      const promptToSend = `${systemInstruction}\n\nSanitized prompt to analyze:\n"${sanitizedPrompt}"`;
 
-    if (!rawParsed) {
-      throw new Error('Gemini returned unparsable response structure');
+      const apiPromise = model.generateContent(promptToSend);
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error('Gemini API timeout exceeded')), 8000)
+      );
+
+      const result = await Promise.race([apiPromise, timeoutPromise]);
+      const responseText = result.response.text();
+      const rawParsed = parseJsonSafely(responseText);
+
+      if (!rawParsed) {
+        throw new Error('Gemini returned unparsable response structure');
+      }
+
+      const validated = geminiResponseSchema.parse(rawParsed);
+
+      return {
+        success: true,
+        data: validated,
+        latencyMs: Date.now() - startTime,
+        status: 'SUCCESS',
+        modelUsed: modelName,
+        decisionOverrideRequired: false,
+      };
+    } catch (err) {
+      lastError = err;
+      // If error is 404 / model not found, continue to next candidate model
+      if (err.message && (err.message.includes('404') || err.message.includes('not found') || err.message.includes('no longer available'))) {
+        logger.warn(`Gemini model ${modelName} unavailable, attempting next candidate...`);
+        continue;
+      }
+      break;
     }
-
-    const validated = geminiResponseSchema.parse(rawParsed);
-
-    return {
-      success: true,
-      data: validated,
-      latencyMs: Date.now() - startTime,
-      status: 'SUCCESS',
-      decisionOverrideRequired: false,
-    };
-  } catch (error) {
-    logger.warn('Gemini API evaluation failed or timed out:', error.message);
-    const fallback = generateFallbackAnalysis(sanitizedPrompt, localContext);
-
-    // Rule: "If Gemini fails, return a REVIEW decision."
-    return {
-      success: false,
-      data: {
-        ...fallback,
-        explanation: `External AI security evaluation failed (${error.message}). Marked for manual review.`,
-        recommendedAction: 'REVIEW',
-      },
-      latencyMs: Date.now() - startTime,
-      status: 'FAILED',
-      decisionOverrideRequired: true,
-      error: error.message,
-    };
   }
+
+  logger.warn('Gemini API evaluation failed or timed out:', lastError ? lastError.message : 'Unknown error');
+  const fallback = generateFallbackAnalysis(sanitizedPrompt, localContext);
+
+  // Rule: "If Gemini fails, return a REVIEW decision."
+  return {
+    success: false,
+    data: {
+      ...fallback,
+      explanation: `External AI security evaluation fallback (${lastError ? lastError.message : 'Timeout'}). Marked for review.`,
+      recommendedAction: 'REVIEW',
+    },
+    latencyMs: Date.now() - startTime,
+    status: 'FAILED',
+    decisionOverrideRequired: true,
+    error: lastError ? lastError.message : 'Evaluation failed',
+  };
 };
 
 export default { analyzeWithGemini, geminiResponseSchema };

@@ -1,0 +1,21 @@
+{
+  "name": "trustguard-ai-root",
+  "version": "1.0.0",
+  "description": "TrustGuard AI — Secure AI Prompt Gateway (Full-Stack Monorepo)",
+  "scripts": {
+    "dev:backend": "cd backend && npm run dev",
+    "dev:frontend": "cd frontend && npm run dev",
+    "install:all": "cd backend && npm install && cd ../frontend && npm install",
+    "build:frontend": "cd frontend && npm run build",
+    "start": "cd backend && npm start"
+  },
+  "keywords": [
+    "ai-gateway",
+    "cybersecurity",
+    "prompt-injection",
+    "pii-redaction",
+    "gemini"
+  ],
+  "author": "TrustGuard AI",
+  "license": "MIT"
+}
